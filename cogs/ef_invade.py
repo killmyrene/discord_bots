@@ -6,8 +6,6 @@ from datetime import datetime, timezone, date
 from math import ceil
 from .utils.dataIO import dataIO
 import collections
-from .utils.ef_invade_utils import *
-
 
 class EFInvade:
     def __init__(self, bot):
@@ -327,9 +325,33 @@ class EFInvade:
     def save_server_settings(self, server_id, server_setting):
         self.settings[server_id] = server_setting
         dataIO.save_json(get_invade_setting_filepath(), self.settings)
-    
+
+
+
+def check_folders():
+    paths = ("data/ef_invade", "data/ef_invade/files")
+    for path in paths:
+        if not os.path.exists(path):
+            print("Creating {} folder...".format(path))
+            os.makedirs(path)
+
+def get_invade_setting_filepath():
+    return "data/ef_invade/settings.json"
+
+def get_invade_import_api_filepath():
+    return "../data/ef_invade/secret_file.json"
+
+def check_files():
+    f = get_invade_setting_filepath()
+    if not dataIO.is_valid_json(f):
+        print("Creating {}...".format(f))
+        dataIO.save_json(f, {'dummy_server_id' : generate_default_invade_priority_settings()})
+
+def generate_default_invade_priority_settings():
+    return { '0' : [], '1' : [], '2' : [], '3' :[], 'board' :[]}
 
 def setup(bot):
     check_folders()
     check_files()
+    
     bot.add_cog(EFInvade(bot))
