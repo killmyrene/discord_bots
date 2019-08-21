@@ -6,6 +6,8 @@ from datetime import datetime, timezone, date
 from math import ceil
 from .utils.dataIO import dataIO
 import collections
+from .utils.priority_info import PriorityInfo
+import requests
 
 class EFInvade:
     def __init__(self, bot):
@@ -56,7 +58,7 @@ class EFInvade:
     async def _invade_route_pic(self, ctx: commands.Context):
         """Shows the optimal route of the board to clear and unlock high valued blocks"""
 
-        routepic_path = os.path.join("data", "ef_invade", "files", "route_round41.jpg")
+        routepic_path = os.path.join("data", "ef_invade", "files", "route_round47.jpg")
         channel = ctx.message.channel
 
         try:
@@ -309,6 +311,61 @@ class EFInvade:
         await self.bot.say("Board of size {} has been set".format(len(server_setting['board'])))
         self.save_server_settings(ctx.message.server.id, server_setting)
 
+
+    @_invade.command(pass_context=True, name="importpr")
+    async def _invade_import_pr(self, ctx: commands.Context, spreadsheetId : str):
+        """Downloads a Google Spreadsheet file and imports and displays the priority lists
+        The content of the spreadsheet expects the following
+
+        Total Score, <Score>
+        Num of Stars, <Star>
+        Priority +0, <Block #1>, <Block #2>, <Block#3>, ...
+        Priority +1, <Block #1>, <Block #2>, <Block#3>, ...
+        Priority +2, <Block #1>, <Block #2>, <Block#3>, ...
+        Priority +3, <Block #1>, <Block #2>, <Block#3>, ...
+
+        """
+        spreadsheetUrl = "https://docs.google.com/spreadsheets/d/{0}/export?format=csv&id={0}&gid=0".format(spreadsheetId)
+
+        response = requests.get(spreadsheetUrl)
+        
+        if response.status_code != 200:
+            await self.bot.say("Unable to download spreadsheet with id {}. Return status code {}".format(spreadsheetId, response.status_code))
+            return
+
+
+        try:
+            print("Creating PriorityInfo with {}".format(response.text))
+            pr = PriorityInfo(response.text)
+        except Exception as e:
+            print("Failed to create stuff")
+            print(e)
+            await self.bot.say('''\
+                Failed to parse priorityInfo. The contents should be the following format
+                Total Score, <Score>
+                Num of Stars, <Star> 
+                Priority +0, <Block #1>, <Block #2>, <Block#3>, ...
+                Priority +1, <Block #1>, <Block #2>, <Block#3>, ...
+                Priority +2, <Block #1>, <Block #2>, <Block#3>, ...
+                Priority +3, <Block #1>, <Block #2>, <Block#3>, ... ''')
+            return
+
+        await self.bot.say('''\
+            Score: {}
+Stars: {}
+PR +0: {}
+PR +1: {}
+PR +2: {}
+PR +3: {}
+Num PRs: {}
+            '''.format(pr.score, 
+                pr.stars, 
+                pr.priority0, 
+                pr.priority1, 
+                pr.priority2, 
+                pr.priority3,
+                pr.numPriorities))
+
     def is_enchant_lvl_valid(self, enchant_lvl):
         enchant_lvl_int = int(enchant_lvl)
         if enchant_lvl_int < 0 or enchant_lvl_int > 3:
@@ -353,5 +410,5 @@ def generate_default_invade_priority_settings():
 def setup(bot):
     check_folders()
     check_files()
-    
+
     bot.add_cog(EFInvade(bot))
