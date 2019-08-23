@@ -7,7 +7,10 @@ from math import ceil
 from .utils.dataIO import dataIO
 import collections
 from .utils.priority_info import PriorityInfo
+from .utils.ef_invade_utils import *
+
 import requests
+from textwrap import dedent
 
 class EFInvade:
     def __init__(self, bot):
@@ -203,7 +206,7 @@ class EFInvade:
         server_setting = self.get_server_setting(ctx.message.server.id)
 
         #Validate enchant lvl
-        if not self.is_enchant_lvl_valid(enchant_lvl):
+        if not is_enchant_lvl_valid(enchant_lvl):
             await self.bot.say("Enchant LVL should be within 0-3")
             return
 
@@ -222,7 +225,7 @@ class EFInvade:
         server_setting = self.get_server_setting(ctx.message.server.id)
 
         #Validate enchant lvl
-        if not self.is_enchant_lvl_valid(enchant_lvl):
+        if not is_enchant_lvl_valid(enchant_lvl):
             await self.bot.say("Enchant LVL should be within 0-3")
             return
 
@@ -255,7 +258,7 @@ class EFInvade:
         server_setting = self.get_server_setting(ctx.message.server.id)
 
         #Validate enchant lvl
-        if not self.is_enchant_lvl_valid(enchant_lvl):
+        if not is_enchant_lvl_valid(enchant_lvl):
             await self.bot.say("Enchant LVL should be within 0-3")
             return
 
@@ -290,7 +293,7 @@ class EFInvade:
 
             await self.bot.say("All priorites have been cleared")
         else:
-            if not self.is_enchant_lvl_valid(enchant_lvl):
+            if not is_enchant_lvl_valid(enchant_lvl):
                 await self.bot.say("Enchant LVL should be within 0-3")
                 return
             server_setting[enchant_lvl] = []
@@ -306,14 +309,14 @@ class EFInvade:
         server_setting = self.get_server_setting(ctx.message.server.id)
 
         board = block_numbers.replace("\n", " ").split(" ")
-        server_setting['board'] = [int(s) for s in list(filter(len, board))]
+        self.settings['board'] = [int(s) for s in list(filter(len, board))]
 
-        await self.bot.say("Board of size {} has been set".format(len(server_setting['board'])))
-        self.save_server_settings(ctx.message.server.id, server_setting)
+        await self.bot.say("Board of size {} has been set".format(len(self.settings['board'])))
+        dataIO.save_json(get_invade_setting_filepath(), self.settings)
 
 
     @_invade.command(pass_context=True, name="importpr")
-    async def _invade_import_pr(self, ctx: commands.Context, spreadsheetId : str):
+    async def _invade_import_pr(self, ctx: commands.Context, spreadsheetId : str, channel: discord.Channel=None):
         """Downloads a Google Spreadsheet file and imports and displays the priority lists
         The content of the spreadsheet expects the following
 
@@ -325,53 +328,105 @@ class EFInvade:
         Priority +3, <Block #1>, <Block #2>, <Block#3>, ...
 
         """
-        spreadsheetUrl = "https://docs.google.com/spreadsheets/d/{0}/export?format=csv&id={0}&gid=0".format(spreadsheetId)
 
+        if channel is None:
+            channel = ctx.message.channel
+        
+        spreadsheetUrl = "https://docs.google.com/spreadsheets/d/{0}/export?format=csv&id={0}&gid=0".format(spreadsheetId)
         response = requests.get(spreadsheetUrl)
         
         if response.status_code != 200:
             await self.bot.say("Unable to download spreadsheet with id {}. Return status code {}".format(spreadsheetId, response.status_code))
             return
 
-
         try:
             print("Creating PriorityInfo with {}".format(response.text))
             pr = PriorityInfo(response.text)
         except Exception as e:
-            print("Failed to create stuff")
             print(e)
-            await self.bot.say('''\
+            await self.bot.say(dedent('''\
                 Failed to parse priorityInfo. The contents should be the following format
                 Total Score, <Score>
                 Num of Stars, <Star> 
                 Priority +0, <Block #1>, <Block #2>, <Block#3>, ...
                 Priority +1, <Block #1>, <Block #2>, <Block#3>, ...
                 Priority +2, <Block #1>, <Block #2>, <Block#3>, ...
-                Priority +3, <Block #1>, <Block #2>, <Block#3>, ... ''')
+                Priority +3, <Block #1>, <Block #2>, <Block#3>, ... '''))
             return
 
-        await self.bot.say('''\
+
+        print(dedent('''\
             Score: {}
-Stars: {}
-PR +0: {}
-PR +1: {}
-PR +2: {}
-PR +3: {}
-Num PRs: {}
+            Stars: {}
+            PR +0: {}
+            PR +1: {}
+            PR +2: {}
+            PR +3: {}
+            Num PRs: {}
             '''.format(pr.score, 
                 pr.stars, 
-                pr.priority0, 
-                pr.priority1, 
-                pr.priority2, 
-                pr.priority3,
-                pr.numPriorities))
+                pr.priority[0], 
+                pr.priority[1], 
+                pr.priority[2], 
+                pr.priority[3],
+                pr.numPriorities)))
 
-    def is_enchant_lvl_valid(self, enchant_lvl):
-        enchant_lvl_int = int(enchant_lvl)
-        if enchant_lvl_int < 0 or enchant_lvl_int > 3:
-            return False
-        return True
+        criterias = [700, 680, 650, 640, 630, 620, 610, 600, 570, 540, 500, 460, 420, 380]
 
+        print("Initial Score: {}, Star: {}".format(pr.score, pr.stars))
+
+        await self.bot.send_message(channel, "Priorities according to level\n")
+        sum_new_score = 0
+        sum_new_stars = 0
+        for enchant_lvl, pr_list in enumerate(pr.priority):
+            
+            if len(pr_list) == 0:
+                continue
+
+            score_list = list(map(lambda x: self.lookup_score(x, enchant_lvl), pr_list))
+            print(pr_list)
+            print(score_list)
+            current_pr_score = sum(score_list)
+            current_pr_stars = sum(list(map(lambda x: get_num_stars(x, enchant_lvl > 0), score_list)))
+
+            print("Total Scores at +{}: {}, Stars: {}".format(enchant_lvl, current_pr_score, current_pr_stars))
+            sum_new_score += current_pr_score
+            sum_new_stars += current_pr_stars
+    
+            message = "+{}\n".format(enchant_lvl)
+
+            for criteria in criterias:
+                prInCriteria = list(filter(lambda x: self.lookup_score(x, enchant_lvl) >= criteria, pr_list))
+                if len(prInCriteria) > 0:
+                    message += "{}s: {}\n".format(criteria, ", ".join(prInCriteria))
+                    pr_list = [x for x in pr_list if x not in prInCriteria]
+
+            if len(pr_list) > 0:
+                message += "below 380s: {}\n".format(", ".join(pr_list))
+            
+            await self.bot.send_message(channel, message)
+
+        print("Initial Area Score: {}".format(pr.score))
+
+        sum_new_score += pr.score
+        sum_new_stars += pr.stars
+
+        print("Total Area Score: {}, Stars: {}".format(sum_new_score, sum_new_stars))
+        final_score = sum_new_score * (1 + 0.01 * sum_new_stars)
+        print("Final Score: {}".format(final_score))
+        print("Tix usage: {}".format(pr.numPriorities))
+
+        await self.bot.send_message(channel, dedent('''\
+            Initial Score & Stars: {:,} pts / {} :star:
+            Projected Tix Used: {}
+            Projected Total Score: {:,}
+            '''.format(pr.score, pr.stars,
+                pr.numPriorities, 
+                final_score)))
+    
+    def lookup_score(self, block_num:str, enchant_lvl:int):
+        board = self.settings['board']
+        return board[int(block_num) - 1] + 50 * enchant_lvl
 
     def get_server_setting(self, server_id):
         if server_id not in self.settings:
@@ -382,30 +437,6 @@ Num PRs: {}
     def save_server_settings(self, server_id, server_setting):
         self.settings[server_id] = server_setting
         dataIO.save_json(get_invade_setting_filepath(), self.settings)
-
-
-
-def check_folders():
-    paths = ("data/ef_invade", "data/ef_invade/files")
-    for path in paths:
-        if not os.path.exists(path):
-            print("Creating {} folder...".format(path))
-            os.makedirs(path)
-
-def get_invade_setting_filepath():
-    return "data/ef_invade/settings.json"
-
-def get_invade_import_api_filepath():
-    return "../data/ef_invade/secret_file.json"
-
-def check_files():
-    f = get_invade_setting_filepath()
-    if not dataIO.is_valid_json(f):
-        print("Creating {}...".format(f))
-        dataIO.save_json(f, {'dummy_server_id' : generate_default_invade_priority_settings()})
-
-def generate_default_invade_priority_settings():
-    return { '0' : [], '1' : [], '2' : [], '3' :[], 'board' :[]}
 
 def setup(bot):
     check_folders()
