@@ -14,6 +14,8 @@ from bs4 import BeautifulSoup
 from google.cloud import translate
 from dotmap import DotMap
 
+from requests import Session
+
 class EFNews:
 
     """ Post EF news to discord channel. """
@@ -21,11 +23,11 @@ class EFNews:
 
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="C:\\Users\Paolo\Desktop\DiscordDev\googleapi-31e7520fc607.json"
         self.bot = bot
-        self.globalUrlHost = "http://ef-server12-13-2052877516.us-west-1.elb.amazonaws.com:8080/EF/"
+        self.globalUrlHost = "http://ef-server12-13-2052877516.us-west-1.elb.amazonaws.com:8080/EF/" 
         self.globalUrlPath = "getNewsMultiLang?domain=J&lang=EN"
         self.globalFullUrl = self.globalUrlHost + self.globalUrlPath
 
-        self.krUrlHost = "http://14.63.200.181:8080/EF/"
+        self.krUrlHost = "http://ef-server2-1648633519.ap-northeast-2.elb.amazonaws.com:8080/EF/"
         self.krUrlPath = "getNews?domain=A"
         self.krFullUrl = self.krUrlHost + self.krUrlPath
 
@@ -146,7 +148,7 @@ class EFNews:
             return embeds
 
         for section in sections:
-            for splitstring in self.chunkstring(section.text, 1024):
+            for splitstring in self.chunkstring(section.text, 1000):
                 embed = self.make_default_embed(title, url, thumbnail)
                 embed.add_field(name=name, value=splitstring, inline=False)
                 embeds.append(embed)
@@ -222,6 +224,9 @@ class EFNews:
                 except HTTPException as x:
                     await self.bot.say("Encountered error posting the news '" + embed.title + "'")
                     print(x)
+                    print(x.response)
+                    print(x.text)
+                    print(x.code)
                     break
             if self.disableEmbedMake:
                 #Exit loop immediately since we don't want to post further embeds anymore
@@ -241,7 +246,7 @@ class EFNews:
 
         info = self.extract_news_info(news_body)
         #modify thumbnail to add KR url host, as the body doesn't return the full url
-        info.thumbnail = self.krUrlHost[:-4] + info.thumbnail
+        #info.thumbnail = self.krUrlHost[:-4] + info.thumbnail
 
         #Check cache to reduce Translate API usage
         if self.isembedcontentcached(server, info.text):

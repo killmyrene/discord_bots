@@ -42,7 +42,7 @@ def get_num_stars(score:int, is_enchanted=False):
     if score > 540:
         numStars += 1
 
-    if score > 450:
+    if score > 460:
         numStars += 1
 
     if score > 380:
@@ -52,11 +52,9 @@ def get_num_stars(score:int, is_enchanted=False):
         numStars += 1
 
     if is_enchanted:
-        if score >= 650:
+        if score >= 650 or (510 <= score < 540) or (590 <= score < 600):
             return 0
         elif numStars > 0:
             return 1
 
     return numStars
-
-

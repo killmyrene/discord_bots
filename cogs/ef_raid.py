@@ -6,7 +6,7 @@ from datetime import datetime, timezone, date
 class EFRaid:
 	def __init__(self, bot):
 		self.bot = bot
-		self.rotation = ["1.6, 1.6, 4.7, 4.7" ]
+		self.rotation = ["1.9, 1.11, 4.8, 2x 5.6", "2x 1.9, 4.8, 2x 5.6"]
 
 	def get_total_days(self):
 		now = datetime.utcnow()
@@ -15,7 +15,7 @@ class EFRaid:
 		return totalNumDays
 
 	def get_current(self):
-		return (self.get_total_days() + 1) % len(self.rotation)
+		return (self.get_total_days() - 1) % len(self.rotation)
 
 	def get_modulus(self):
 		return (self.get_total_days()) % len(self.rotation)
